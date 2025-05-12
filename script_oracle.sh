@@ -1,0 +1,148 @@
+#!/bin/bash
+
+set -uo pipefail
+
+OS=""
+PACKAGE_MANAGER=""
+
+# Detecta distribuição
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$ID
+else
+    echo "Não foi possível detectar o sistema operacional."
+    exit 1
+fi
+
+echo "Sistema detectado: $OS"
+
+# Define gerenciador de pacotes
+case "$OS" in
+    ubuntu|debian)
+        PACKAGE_MANAGER="apt"
+        ;;
+    ol|oracle|centos|rhel|rocky)
+        PACKAGE_MANAGER="yum"
+        ;;
+    *)
+        echo "Distribuição $OS não suportada por este script."
+        exit 1
+        ;;
+esac
+
+echo "=== Parando serviços do Kaspersky ==="
+systemctl stop klnagent64 2>/dev/null
+systemctl stop kesl 2>/dev/null
+
+echo "=== Removendo pacotes ==="
+if [ "$PACKAGE_MANAGER" = "apt" ]; then
+    apt purge -y klnagent klnagent64 kesl
+    sudo dpkg --remove --force-remove-reinstreq klnagent64
+    apt autoremove -y --purge
+else
+    yum remove -y klnagent klnagent64 kesl
+    yum autoremove -y
+fi
+
+echo "=== Removendo diretórios residuais ==="
+rm -rf /opt/kaspersky /var/opt/kaspersky /etc/opt/kaspersky /var/log/kaspersky
+
+echo "=== Verificando possíveis binários remanescentes ==="
+rm -f /usr/bin/kesl-control /usr/bin/klnagent
+
+echo "✅ Remoção completa finalizada."
+
+echo '================================Atualizando Kernel====================================='
+if [ "$PACKAGE_MANAGER" = "apt" ]; then
+    apt update
+    apt install -y --install-recommends linux-generic-hwe-20.04 netplan mtr nmtui nload net-tools network-manager
+else
+    yum update -y
+    yum install -y kernel mtr nmtui nload net-tools NetworkManager
+fi
+
+systemctl daemon-reexec
+
+echo "==================== Excluindo pacote anterior ===================="
+
+RPM_FILE="/tmp/klnagent64-15.1.0-20748.x86_64.rpm"
+
+sudo rm -f "$RPM_FILE"
+
+echo '===============================Instalando Kaspersky===================================='
+
+if [ "$PACKAGE_MANAGER" = "apt" ]; then
+    DOWNLOAD_URL="https://downloads.hsprevent.com.br/klnagent64_15.1.0-20748_amd64.deb"
+    FILE_PATH="$DEB_FILE"
+else
+    DOWNLOAD_URL="https://downloads.hsprevent.com.br/klnagent64-15.1.0-20748.x86_64.rpm"
+    FILE_PATH="$RPM_FILE"
+fi
+
+if [ -f "$FILE_PATH" ]; then
+    echo "Pacote já existe: $FILE_PATH. Pulando o download."
+else
+    echo "Baixando pacote..."
+    wget -O "$FILE_PATH" "$DOWNLOAD_URL"
+fi
+
+if [ "$PACKAGE_MANAGER" = "apt" ]; then
+    chmod +x "$FILE_PATH"
+    sudo dpkg -i "$FILE_PATH" || { echo "Erro ao instalar o .deb"; exit 1; }
+else
+    sudo yum install -y "$FILE_PATH" || { echo "Erro ao instalar o .rpm"; exit 1; }
+fi
+
+SESSION_NAME="kaspersky"
+
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    tmux kill-session -t "$SESSION_NAME"
+fi
+
+tmux new-session -d -s $SESSION_NAME
+
+tmux send-keys -t $SESSION_NAME "cd /opt/kaspersky/klnagent64/lib/bin/setup" Enter
+sleep 5
+tmux send-keys "./postinstall.pl" Enter
+sleep 2
+tmux send-keys C-c
+sleep 2
+tmux send-keys y
+sleep 2
+tmux send-keys Enter
+sleep 2
+tmux send-keys 172.40.0.3
+sleep 2
+tmux send-keys Enter
+sleep 2
+tmux send-keys 14000
+sleep 2
+tmux send-keys Enter
+sleep 2
+tmux send-keys 13000
+sleep 2
+tmux send-keys Enter
+sleep 2
+tmux send-keys y
+sleep 2
+tmux send-keys Enter
+sleep 2
+tmux send-keys 2
+sleep 2
+tmux send-keys Enter
+sleep 2
+tmux send-keys "cd /opt/kaspersky/klnagent64/bin" Enter
+sleep 2
+tmux send-keys "./klmover -address 172.40.0.3" Enter
+sleep 90
+sudo systemctl restart klnagent64
+sleep 2
+sudo systemctl status klnagent64 --no-pager
+
+echo "Removendo pacote: $FILE_PATH"
+rm -f "$FILE_PATH"
+
+tmux kill-session -t kaspersky
+
+echo '===============================Kaspersky finalizado===================================='
+sleep 3
