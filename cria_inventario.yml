@@ -25,5 +25,4 @@
           description: "{{ item.descricao }}"
           inventory: "{{ inventory_id }}"
         status_code: 201
-        validate_certs: false  # Desabilite isso apenas em ambientes de testes
       loop: "{{ hosts_para_adicionar }}"
