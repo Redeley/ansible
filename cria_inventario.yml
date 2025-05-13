@@ -1,0 +1,29 @@
+---
+- name: Adiciona múltiplos hosts no inventário do AWX
+  hosts: localhost
+  gather_facts: false
+  vars:
+    awx_host: "http://10.60.0.31:10445/"             # Altere conforme seu ambiente
+    awx_token: "t7ZtaZAdj3YxrjvMsks9m3lHRlK7Ta"      # Gere um token de acesso via API ou UI do AWX
+    inventory_id: 22                                 # ID do inventário no AWX
+    hosts_para_adicionar:
+      - nome: "10.60.0.9"
+        descricao: "hml-meli-db"
+      - nome: "10.70.0.9"
+        descricao: "hml-meli-api"
+  tasks:
+    - name: Adicionando hosts ao inventário
+      uri:
+        url: "{{ awx_host }}/api/v2/hosts/"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ awx_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ item.nome }}"
+          description: "{{ item.descricao }}"
+          inventory: "{{ inventory_id }}"
+        status_code: 201
+        validate_certs: false  # Desabilite isso apenas em ambientes de testes
+      loop: "{{ hosts_para_adicionar }}"
