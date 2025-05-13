@@ -1,0 +1,24 @@
+---
+- name: Atualizar Kernel e reinstalar Kaspersky
+  hosts: all
+  become: yes
+
+  vars:
+    script_local: "./script_oracle.sh"
+    script_remoto: "/tmp/script_oracle.sh"
+
+  tasks:
+    - name: Copiar script para o servidor remoto
+      copy:
+        src: "{{ script_local }}"
+        dest: "{{ script_remoto }}"
+        mode: '0755'
+
+    - name: Executar script no servidor remoto e capturar saída
+      shell: bash {{ script_remoto }}
+      register: script_output
+      ignore_errors: yes  # opcional, se você quiser que erros no script não parem o playbook
+
+    - name: Exibir saída do script na interface AWX
+      debug:
+        var: script_output.stdout_lines
