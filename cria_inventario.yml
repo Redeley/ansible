@@ -9,8 +9,8 @@
     hosts_para_adicionar:
       - nome: "10.60.0.9"
         descricao: "hml-meli-db"
-      - nome: "10.70.0.9"
-        descricao: "hml-meli-api"
+      - nome: "10.90.0.65"
+        descricao: "PRD-HS-SUCRMAPP"
   tasks:
     - name: Adicionando hosts ao inventário
       uri:
