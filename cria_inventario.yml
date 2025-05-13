@@ -3,7 +3,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    awx_host: "http://10.60.0.31:10445/"             # Altere conforme seu ambiente
+    awx_host: "http://10.60.0.31:10445"             # Altere conforme seu ambiente
     awx_token: "t7ZtaZAdj3YxrjvMsks9m3lHRlK7Ta"      # Gere um token de acesso via API ou UI do AWX
     inventory_id: 22                                 # ID do inventário no AWX
     hosts_para_adicionar:
