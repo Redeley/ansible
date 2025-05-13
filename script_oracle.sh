@@ -37,11 +37,10 @@ systemctl stop kesl 2>/dev/null
 echo "=== Removendo pacotes ==="
 if [ "$PACKAGE_MANAGER" = "apt" ]; then
     apt purge -y klnagent klnagent64 kesl
-    sudo dpkg --remove --force-remove-reinstreq klnagent64
+    dpkg --remove --force-remove-reinstreq klnagent64
     apt autoremove -y --purge
 else
     yum remove -y klnagent klnagent64 kesl
-    yum autoremove -y
 fi
 
 echo "=== Removendo diretórios residuais ==="
@@ -52,13 +51,13 @@ rm -f /usr/bin/kesl-control /usr/bin/klnagent
 
 echo "✅ Remoção completa finalizada."
 
-echo '================================Atualizando Kernel====================================='
+echo '================================Atualizando Kernel e Instalando Pacotes====================================='
 if [ "$PACKAGE_MANAGER" = "apt" ]; then
     apt update
-    apt install -y --install-recommends linux-generic-hwe-20.04 netplan mtr nmtui nload net-tools network-manager
+    apt install -y wget --install-recommends linux-generic-hwe-20.04 netplan mtr nmtui nload net-tools network-manager
 else
     yum update -y
-    yum install -y kernel mtr nmtui nload net-tools NetworkManager
+    yum install -y wget kernel mtr nmtui nload net-tools NetworkManager || echo "Alguns pacotes podem não estar disponíveis."
 fi
 
 systemctl daemon-reexec
@@ -66,31 +65,44 @@ systemctl daemon-reexec
 echo "==================== Excluindo pacote anterior ===================="
 
 RPM_FILE="/tmp/klnagent64-15.1.0-20748.x86_64.rpm"
-
-sudo rm -f "$RPM_FILE"
+rm -f "$RPM_FILE"
 
 echo '===============================Instalando Kaspersky===================================='
 
 if [ "$PACKAGE_MANAGER" = "apt" ]; then
+    FILE_PATH="/tmp/klnagent64_15.1.0-20748_amd64.deb"
     DOWNLOAD_URL="https://downloads.hsprevent.com.br/klnagent64_15.1.0-20748_amd64.deb"
-    FILE_PATH="$DEB_FILE"
 else
-    DOWNLOAD_URL="https://downloads.hsprevent.com.br/klnagent64-15.1.0-20748.x86_64.rpm"
     FILE_PATH="$RPM_FILE"
+    DOWNLOAD_URL="https://downloads.hsprevent.com.br/klnagent64-15.1.0-20748.x86_64.rpm"
 fi
 
-if [ -f "$FILE_PATH" ]; then
-    echo "Pacote já existe: $FILE_PATH. Pulando o download."
-else
+# Verifica se wget está disponível
+if ! command -v wget >/dev/null 2>&1; then
+    echo "Erro: wget não está instalado. Abortando."
+    exit 1
+fi
+
+# Baixa o pacote se não existir
+if [ ! -f "$FILE_PATH" ]; then
     echo "Baixando pacote..."
     wget -O "$FILE_PATH" "$DOWNLOAD_URL"
+else
+    echo "Pacote já existe: $FILE_PATH. Pulando o download."
 fi
 
+# Confirma se o arquivo foi baixado corretamente
+if [ ! -f "$FILE_PATH" ]; then
+    echo "Erro: o arquivo $FILE_PATH não foi baixado corretamente."
+    exit 1
+fi
+
+# Instala o pacote
 if [ "$PACKAGE_MANAGER" = "apt" ]; then
     chmod +x "$FILE_PATH"
-    sudo dpkg -i "$FILE_PATH" || { echo "Erro ao instalar o .deb"; exit 1; }
+    dpkg -i "$FILE_PATH" || { echo "Erro ao instalar o .deb"; exit 1; }
 else
-    sudo yum install -y "$FILE_PATH" || { echo "Erro ao instalar o .rpm"; exit 1; }
+    yum install -y "$FILE_PATH" || { echo "Erro ao instalar o .rpm"; exit 1; }
 fi
 
 SESSION_NAME="kaspersky"
@@ -132,12 +144,13 @@ sleep 2
 tmux send-keys Enter
 sleep 2
 tmux send-keys "cd /opt/kaspersky/klnagent64/bin" Enter
-sleep 2
+sleep 30
 tmux send-keys "./klmover -address 172.40.0.3" Enter
 sleep 90
-sudo systemctl restart klnagent64
-sleep 2
-sudo systemctl status klnagent64 --no-pager
+
+systemctl restart klnagent64
+sleep 10
+systemctl status klnagent64 --no-pager
 
 echo "Removendo pacote: $FILE_PATH"
 rm -f "$FILE_PATH"
